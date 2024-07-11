@@ -1,0 +1,772 @@
+---
+title: "AED_case_hospital"
+author: "Adriano Neto"
+date: "2024-07-06"
+output:
+  pdf_document: default
+  html_document: default
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# ANÁLISE EXPLORATÓRIA DOS DADOS DE HOSPITAIS
+
+## Essa análise exporatória foi gerada por Adriano Neto, com uso das ferramentas Excel, Rstudio(R) e Rmarkdown.
+
+# Importa a base de dados
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# Limpa o ambiente
+rm(list = ls())
+
+# Carrega/instala conjuto de pacotes que geralmente utilizo
+pacotes = c(
+  "tidyverse", "readxl", "dplyr", "stringr", "xgboost",
+  "wooldridge", "lmtest", "faraway", "stargazer", "randomForest",
+  "ggplot2", "tseries", "car", "corrplot", "PerformanceAnalytics", 
+  "caret", "rmarkdown", "glmnet", "neuralnet", "e1071", "gbm", "rpart",
+  "httr", "jsonlite", "data.table", "basedosdados", "ggmap", "geosphere",
+  "sf", "osmdata", "tmaptools", "mapsapi", "writexl", "openxlsx", "ggrepel"
+)
+
+
+# Instala pacotes que ainda não estão instalados
+for (x in pacotes) {
+  if (!x %in% installed.packages()) {
+    install.packages(x, repos = "http://cran.us.r-project.org")
+  }
+}
+
+# Carrega os pacotes
+lapply(pacotes, require, character.only = TRUE)
+rm(pacotes, x)
+
+
+
+# --------------------------- Importando dados -------------------------------- #
+
+# Defina o caminho para o arquivo
+file_path <- "C:/Users/super/Downloads/case_hospital/db_aed_case_hospital.xlsx"
+
+# Liste as planilhas disponíveis no arquivo
+sheet_names <- excel_sheets(file_path)
+
+# Importe a planilha desejada (por exemplo, a primeira planilha)
+df_alt1 <- read_excel(file_path, sheet = sheet_names[1])
+
+## funcoes
+transformar_maiusculas <- function(df, coluna) {
+  # Verificar se a coluna existe no data frame
+  if (!(coluna %in% colnames(df))) {
+    stop("A coluna especificada não existe no data frame.")
+  }
+  
+  # Transformar a coluna em maiúsculas
+  df <- df %>%
+    mutate(!!sym(coluna) := toupper(!!sym(coluna)))
+  
+  return(df)
+}
+
+```
+
+# ANALISE EXPLORATÓRIA DOS DADOS
+
+```{r}
+# Análise dos dados ausentes
+
+# Calcula a proporção de NA por variável
+prop_missing <- sapply(df_alt1, function(x) sum(is.na(x)) / length(x)) * 100
+prop_missing <- prop_missing[-which(names(prop_missing) == "resultado_geral")]
+
+# Grafico de barras para a proporção de NAs
+ggplot(data.frame(names = names(prop_missing), proporcao = prop_missing), aes(x = names, y = proporcao)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = paste0(round(proporcao, 1), "%")), vjust = -0.3, size = 3.5) + # Adiciona rótulos de valores em percentual
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5)
+  ) +
+  labs(
+    title = "Proporção de NA's por variável",
+    x = "Variáveis",
+    y = "Percentual de NA's"
+  )
+
+
+
+```
+
+Após calcular a proporção de NA's podemos ter uma investigação mais
+afundp sobre. Os valores faltantes se concetram na variaveis sobre
+resultados sobre indicadores hospitalares os maiores percentuais de
+dados faltantes ficaram com as variaveis de segurança de informaçao
+hospitalar com 25,2% dos dados. Seguido pela variavel de indicador de
+eficiencia do uso da imagem médica com 20,7%. Ambos com percentuais
+relativamente elevados. As demais variaveis com dados faltantes são
+todas sobre indicadores hospitalares com valores na faixa de 5 a 6%. A
+variavel que demonstrou menor proporção de faltantes foi a variavel do
+indicador de readmissão hospitalar com 1,2%, felizmente sendo uma
+variavel de suma importancia na avaliacao e com poucas lacunas de
+informacoes.
+
+A proporçao de dados faltantes no indicadores é alarmante, o que pode
+ocasionar de certa forma uma perda de informacoes que possam ser de
+grande valia em outras analises. Porem, optou-se nessa situação alheio
+de mais informações de se remover as variaveis NA's dado o carater
+qualitativo de como as avaliacoes dos indicadores foi inicialmente
+disposto. Se por ventura fossem notas de variaveis numericas continuas
+poderiamos preenche-las com a media dos dados, porem nao é o caso.
+
+# ANÁLISE DE CORRELAÇÃO
+
+```{r}
+
+# Filtra apenas variaveis de interesse
+selected_columns <- df_alt1[, which(names(df_alt1) == "aval_loc"):which(names(df_alt1) == "efi_img_medic")]
+
+
+# Calcula a matriz de correlação
+correlation_matrix <- cor(selected_columns, use = "complete.obs")
+
+# Plota a matriz de correlação
+corrplot(correlation_matrix, method = "color", type = "full", 
+         addCoef.col = "red", number.cex = 0.7,
+         tl.col = "black", tl.srt = 45, 
+         title = "Matriz de Correlação", mar = c(0,0,1,0))
+
+
+```
+
+# Resultado da análise de correlação do escores de uso hospitalar e avaliação local geral
+
+## 1. Satisfação dos Pacientes:
+
+A variável nvl_satisf tem uma correlação positiva moderada com op_atend
+(0.25), sugerindo que a satisfação dos pacientes está moderadamente
+associada à opinião sobre o atendimento recebido. Uma correlação
+positiva também existe entre nvl_satisf e efi_cuid (0.11), indicando que
+a eficiência dos cuidados também contribui para a satisfação dos
+pacientes.
+
+## 2. Readmissão e Satisfação:
+
+nvl_readim tem uma correlação negativa fraca com nvl_satisf (-0.29),
+indicando que maiores taxas de readmissão estão associadas ligeramente a
+uma pior experiência dos pacientes.
+
+## 3. Avaliação Local e Imagem Médica:
+
+A variável aval_loc tem uma correlação negativa com efi_img_medic
+(-0.14), sugerindo que uma avaliação local mais alta pode estar
+associada a uma imagem médica menos eficiente. Porém, vemos que a
+magnitude da relação é de certa forma fraca.
+
+## 4. Segurança dos Cuidados:
+
+A variável nvl_seg_cuid mostra uma correlação positiva com efi_cuid
+(0.06), indicando que uma melhor segurança nos cuidados está associada a
+uma maior eficiência nos cuidados, Embora a correlação seja muito fraca.
+
+## 5. Uso Eficiente da Imagem Médica:
+
+op_atend tem uma correlação negativa com efi_img_medic (-0.22),
+sugerindo que uma melhor opinião sobre o atendimento pode estar
+associada a uma eficiência menor na imagem médica.
+
+## ANALISAR ESSES 3 PONTOS PARA AED
+
+## - Fatores Positivos para Satisfação:
+
+Eficiência dos cuidados e opinião sobre o atendimento são fatores
+positivos para a satisfação dos pacientes.
+
+## - Fatores Negativos para Satisfação:
+
+Altas taxas de readmissão e baixa eficiência na imagem médica estão
+negativamente associadas à satisfação dos pacientes.
+
+## - Segurança e Eficiência:
+
+Segurança nos cuidados é crucial para a eficiência geral dos cuidados
+prestados.
+
+# Análisando a correlação entre a avaliação local e o resultado geral
+
+```{r message=FALSE, warning=FALSE}
+# Transformando a coluna "Municipio" em maiúsculas
+df_alt1 <- transformar_maiusculas(df_alt1, "cidade")
+df_alt1 <- transformar_maiusculas(df_alt1, "estado")
+
+# Calcula a média da avaliação local por estado
+media_avaliacoes <- aggregate(aval_loc ~ estado , data = df_alt1, FUN = mean)
+
+# Calcula a média do resultado_geral por estado
+media_resultado_geral <- aggregate(resultado_geral ~ estado , data = df_alt1, FUN = mean)
+
+# une as bases
+medias <- merge(media_avaliacoes, media_resultado_geral, by = "estado")
+
+# Reshape os dados para formato longo
+medias_melted <- melt(medias, id.vars = "estado", variable.name = "metric", value.name = "value")
+
+
+```
+
+## Verificando um comparativo entre as métricas gráficamente
+
+```{r message=FALSE, warning=FALSE}
+# Gráfico comparativo entre ambas as metricas
+ggplot(medias_melted, aes(x = estado, y = value, color = metric, group = metric)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  theme_minimal() +
+  labs(title = "Média das Avaliações Locais e Resultados Gerais por Estado",
+       x = "Estado",
+       y = "Nota",
+       color = "Métrica") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+No gráfico acima podemos ver que há uma grande variabilidade no
+intervalo de 2 a 4 de notas da avaliação local. No caso do
+resultado_geral, temos uma constância maior nos valores observados,
+demonstrando menor variabilidade dos dados.
+
+
+# Média da avaliação local por tipo de atendimento
+```{r}
+media_aval_loc_por_tipo_atend <- df_alt1 %>%
+  group_by(tipo_atend) %>%
+  summarize(media_aval_loc = mean(aval_loc, na.rm = TRUE))
+
+# Filtrar os dados para os dois grupos específicos, se necessário
+group1 <- df_alt1 %>% filter(!tipo_atend == "hospitais de acesso crítico") %>% pull(aval_loc)
+group2 <- df_alt1 %>% filter(tipo_atend == "hospitais de acesso crítico") %>% pull(aval_loc)
+
+# Realizar o teste t de Student
+t_test_result <- t.test(group1, group2, var.equal = TRUE) # var.equal = TRUE assume variâncias iguais
+
+# Ver o resultado
+print(t_test_result)
+
+
+```
+Brevemente analisando as duas médias para avaliação local, por meio do teste de hipótese t-student
+foi possível denotar que partindo das médias de 2,64 para hospitais de cuidados agudos e 2,41 de média para
+hospitais de acesso crítico, há diferença estatisticamente significante. Portando a média superior de hospitais de cuidados agudos
+pode enfatizar uma relação melhor entre o hospital e seus pacientes, mas necessitaria de análises mais aprofundadas e utilizando
+outras variáveis para poder concluir isso com mais exatidão.
+
+## Dispersão entre ambas as variáveis Avaliação Local e Resultado Geral
+
+```{r message=FALSE, warning=FALSE}
+# Calcular a correlação de Pearson entre as duas variáveis
+correlacao <- cor(medias$aval_loc, medias$resultado_geral, method = "pearson")
+# Criar um gráfico de dispersão
+cor_disp_av_loc_res_grl <- ggplot(medias, aes(x = aval_loc, y = resultado_geral)) +
+  geom_point() +
+  geom_smooth(method = "lm", col = "blue") +
+  labs(title = "Dispersão entre Avaliações Locais e Resultados Gerais por Estado",
+       x = "Avaliações Locais (aval_loc)",
+       y = "Resultados Gerais (resultado_geral)") +
+  theme_minimal()
+
+print(cor_disp_av_loc_res_grl)
+```
+
+Com o valor de correlação obtido de -0,44 temos uma indicação de
+correlação negativa de grau moderado entre ambas as variáveis. De outro
+modo, podemos atribuir uma possível relação de estados com melhores
+médias da avaliação local tendem a ter resultados piores na média de
+resultados gerais.
+
+Fato esse que corrobora com a hipótese já levantada, de que as
+avaliações locais são genéricas e refletem pouco da realidade e
+qualidade dos hospitais avaliados. Há uma grande variabilidade entre os
+estados, o que demonstra uma possível falta de padronização e critérios
+claros de avaliação para a variavel aval_loc. Diferentemente da variável
+resultado_geral que utilizou do mesmo critério para todos os hospitais
+independente de localidade utilizando como base informações de
+instituições de saúde e profissionais da área, trazendo assim mais
+consistência na avaliação.
+
+# Maior Resultado Geral dos hospitais por estado
+
+```{r}
+# Agrupa e filtra maior resultado_geral por estado
+maiores_resultados <- df_alt1 %>%
+  group_by(estado) %>%
+  slice_max(order_by = resultado_geral, n = 1)
+
+# Filtra valores NA em resultado_geral
+maiores_resultados <- maiores_resultados %>%
+  filter(!is.na(resultado_geral))
+
+# Remove duplicados
+maiores_resultados <- maiores_resultados %>%
+  distinct(estado, .keep_all = TRUE)
+
+
+```
+
+```{r}
+# Gráfico de Maiores resultados por estado
+ggplot(maiores_resultados, aes(x = reorder(estado, -resultado_geral), y = resultado_geral)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = round(resultado_geral, 2)), vjust = 0.5, hjust = -0.2, size = 4, fontface = "bold") +  # Ajustar posição dos rótulos  theme_minimal() +
+  labs(title = "Maior Resultado Geral por Estado",
+       x = "Estado",
+       y = "Resultado Geral") +  # Legenda
+  coord_flip()
+```
+
+Nesse gráfico temos o maior resultado individual por hospital para cada
+estado. Podemos notar que São Paulo tem o melhor resultado, mas também
+temos outros estados com métricas boas, como Góias, Minas Gerais, Rio
+Grande do Norte, Rio Grande do SUl, Santa Catarina, Bahia, Mato Grosso e
+Alagoas. Creio que com esse apanhado é possível notar futuras
+oportunidades de integração com hospitais de qualidade que estejam em
+outros estados visando uma maior expansão a nível nacional e também
+maior capilaridade dos serviços e alcance da empresa, consequentemente
+gerando maior receita e lucro.
+
+# Distribuição de hospitais ativos por estado
+
+```{r}
+# Distribuição por Estado
+hospitais_por_estado <- df_alt1 %>% 
+  filter(ctr_PES == "true",
+         status == "true",
+         serv_emerg == "true") %>%
+  group_by(estado) %>%
+  summarise(n = n())
+
+# Gráfico de barras por Estado
+print(ggplot(hospitais_por_estado, aes(x = reorder(estado, -n), y = n)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = n), vjust = -0.3, size = 3.5) +  # Adicionar rótulos de valores
+  theme_minimal() +
+  labs(title = "Distribuição de Hospitais por Estado", x = "Estado", y = "Número de Hospitais") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)))  # Girar os rótulos dos eixos x
+
+```
+
+Aqui vemos uma clara aglomeração do número de hospitais contidos nessa
+base dde dados. Com São Paulo sendo o estado com maior parcela
+equivalente a 17,4% do total, seguido por Minas Gerais com 12,85%, Rio
+de Janeiro com 8,85%, Bahia com 8,42 e Paraná com 7,31%. Os 5 estados
+com menor parcela da distribuição do número de hospitais dessa mostra
+abarcam juntos apenas 1,35% do total.
+
+Perspectiva essa que pode abrir horizontes para focalizar estados com
+menores atuações da saúde, onde a empresa pode viabilizar um expansão de
+parcerias a fim de trazer saúde de qualidade por meio de seus produtos
+de saúde.
+
+# 10 municípios com maior número de hospitais
+
+```{r}
+# Distribuição por Município com as 10 maiores contagens
+hospitais_por_municipio_top10 <- df_alt1 %>%
+  group_by(cidade) %>%
+  summarise(n = n()) %>%
+  top_n(10, n) %>%  # Pegando as 10 maiores contagens
+  arrange(desc(n))  # Ordenando em ordem decrescente
+
+# Gráfico de barras por Município (os top 10)
+print(ggplot(hospitais_por_municipio_top10, aes(x = reorder(cidade, -n), y = n)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = n), vjust = -0.3, size = 3.5) +  # Adicionar rótulos de valores
+  theme_minimal() +
+  labs(title = "Distribuição GERAL de Hospitais por Município (Top 10)", x = "Município", y = "Número de Hospitais") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)))  # Girar os rótulos dos eixos x
+
+```
+
+No gráfico acima podemos avalia as principais cidades do Brasil que,
+segundo essa amostra analisada contém maior números de hospitais.
+Lembrando que não estamos filtrando por critério de atividade recente ou
+mesmo outros critérios de avaliação para reduzir ou focalizar a análise.
+Tendo isso em vista, ainda sim hospitais que não fornecem alguns
+serviços são uma parcel minúscula que iremos abordar posteriormente.
+
+De volta a distribuição, temos as maiores concetrações do número de
+hospitais concetrados em duas grandes cidades, sendo respectivamente Rio
+de Janeiro e São Paulo com números muito semelhantes. A partir dessas
+cidaddes a distribuição desses números cai mais da metade e mantendo-se
+constante com valores entre 35 e 15 hospitais, com uma média de 28
+hospitais por cidade, isso levando em conta apenas os 8 menores valores
+da distribuição,
+
+Interessante notar que dos 10 municípios com os maiores números de
+hospitais, 8 de 10 são Capitais. Apens Campinas e Londrina que não são
+capitais e curiosamente demonstram os 2 menores valores no gráfico.
+
+# Distribuição de hospitais inativos por cidades com maior montante de hospitais
+
+```{r}
+
+# Filtrar apenas os registros com a data mais recente
+df_alt2 <- df_alt1 %>%
+  group_by(id) %>%
+  filter(data == max(data))  # Filtrar para manter apenas a data mais recente por id
+
+# Calcular a contagem de hospitais por cidade e status
+cont_cit <- df_alt2 %>%
+  group_by(cidade, status) %>%
+  summarise(contagem = n(), .groups = 'drop')
+
+# Selecionar os 7 municípios com o maior número total de hospitais
+cont_cit_total <- cont_cit %>%
+  group_by(cidade) %>%
+  summarise(total_hospitais = sum(contagem), .groups = 'drop') %>%
+  arrange(desc(total_hospitais)) %>%
+  slice_head(n = 7)
+
+# Filtrar o dataframe original para conter apenas os 7 municípios selecionados
+cont_cit_filtrado <- cont_cit %>%
+  filter(cidade %in% cont_cit_total$cidade & status == "false") %>%
+  group_by(cidade) %>%
+  summarise(inativos = sum(contagem), .groups = 'drop')
+
+# Criar o gráfico de barras mostrando a quantidade de hospitais inativos
+ggplot(cont_cit_filtrado, aes(x = reorder(cidade, -inativos), y = inativos, fill = cidade)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = inativos), vjust = -0.5, size = 3) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5)
+  ) +
+  labs(
+    title = "Cidades com a maior quantidade hospitais inativos",
+    x = "Município",
+    y = "Quantidade de Hospitais Inativos",
+    fill = "Município"
+  ) +
+  scale_fill_brewer(palette = "Set3") +
+  coord_flip()  # Inverter eixo x e y para melhor visualização, se necessário
+
+```
+
+No gráfico acima conseguimos avaliar as cidades com maior quantidade de
+hospitais inativos por meio da distribuição. Importante ressaltar que a
+metodologia feita para selecionar as cidades, consistiu nas cidaes com
+maior quantidade de hospitais, partindo desse valor extrair o percentual
+de hospitais inativos. No gráfico está abordado o valor absoluto, porém
+mencionarei os percentuais respectivamente. Como esperado, Salvador e
+São Paulo presentes na lista, tendo em vista que no quesito número de
+hospitais ativos essas cidades estão entre os maiores números.
+
+Salvador em 1º lugar com 3 hospitais equivalente a 8,57% do total da
+cidade. Em seguida temos todas cidades com apenas 1 hospital inativo,
+ordenada pelo seu total de hospitais. Todos as cidades a seguir contém
+apenas 1 hospital inativos variando apenas o percentual em relação ao
+total de hospitais. Começando com São Paulo(1,81%),Goiânia (3,03%),
+Curitiba (3,33%), Belo Horizonte 3,44% e por fim Brasília (3.84%).
+
+# Distribuição da media da avaliação local por estado
+
+```{r}
+# Resultado Geral por Estado
+resultado_estado <- df_alt1 %>%
+  group_by(estado) %>%
+  summarise(media_avaliacao = mean(aval_loc, na.rm = TRUE))
+
+# Gráfico de barras do Resultado Geral por Estado
+ggplot(resultado_estado, aes(x = reorder(estado, -media_avaliacao), y = media_avaliacao)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = round(media_avaliacao, 2)), vjust = -0.3, size = 3.5) +  # Adicionar rótulos de valores
+  theme_minimal() +
+  labs(title = "Resultado Geral por Estado", x = "Estado", y = "Média de Avaliação") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Girar os rótulos dos eixos x
+```
+
+# Comparação Antes e Depois para Hospitais
+
+```{r message=FALSE, warning=FALSE}
+# Convertendo a coluna de data para o formato Date
+df_alt1$data <- as.Date(df_alt1$data)
+
+# Filtrando e comparando antes e depois dos hospitais
+comparacao <- df_alt1 %>%
+  group_by(id, nm_hosp) %>%
+  arrange(id, data) %>%
+  summarise(
+    primeira_avaliacao = first(resultado_geral),
+    ultima_avaliacao = last(resultado_geral)
+  ) %>%
+  mutate(diferente = primeira_avaliacao != ultima_avaliacao,
+         melhoria = ultima_avaliacao > primeira_avaliacao,
+         melhoria_percentual = ((ultima_avaliacao - primeira_avaliacao) / primeira_avaliacao) * 100) %>%  # Adiciona a coluna de melhoria percentual
+  filter(diferente == TRUE) %>%
+  filter(!is.na(primeira_avaliacao) & !is.na(ultima_avaliacao))
+
+# Criando o gráfico
+ggplot(comparacao, aes(x = primeira_avaliacao, y = ultima_avaliacao)) +
+  geom_point(aes(color = melhoria, shape = melhoria, size = melhoria), alpha = 0.7) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  geom_line(aes(group = id), linetype = "solid", color = "grey50", alpha = 0.5) +
+  geom_label_repel(aes(label = ifelse(melhoria, paste(nm_hosp, sprintf("(%.1f%%)", melhoria_percentual)), "")),
+                   size = 3,
+                   box.padding = 0.5,
+                   point.padding = 0.5,
+                   segment.color = "grey50") +
+  theme_minimal() +
+  labs(title = "Comparação de Avaliações: Antes e Depois",
+       x = "Primeira Avaliação",
+       y = "Última Avaliação",
+       color = "Melhoria",
+       shape = "Melhoria",
+       size = "Melhoria") +
+  theme(legend.position = "bottom") +
+  scale_color_manual(values = c("red", "blue")) +
+  scale_shape_manual(values = c(16, 17)) +
+  scale_size_manual(values = c(3, 5))
+
+```
+
+O gráfico acima avalia o caráter de melhor de resultados de avaliação no
+resultao geral para os hospitais ao longo do tempo, os triangulos azuis
+denotam hospitais que tiveram melhoria nos seus resultados se comparados
+com o resultado anterior da ultima avaliação. Dessa forma, é possível
+avaliar a progressão de melhoria de alguns hospitais e até mesmo avaliar
+se a competência da gestão foi impactante nessas melhorias ou pioras.
+
+Dos hospitais que demonstraram melhorias expressivas podemos citar
+respectivamente o Hospital do Rim em São Paulo - SP, seguido por Unimed
+de Campos em Campos dos Goytacazes - RJ e o Hospital Sagrada Família
+também em São Paulo - SP. Agora para o contrário temos, grandes piores
+em suas avaliações para a Casa de Saúde Santos em Santos - SP, seguido
+pelo Hospital São Francisco em São Roque - SP e Santa Casa de Lins
+também no estado de SP em Lins.
+
+Essa análise consegue observar alguns aspectos interessantes sobre as
+melhorias e piores em determinados Hospitais da amostra em questão,
+podendo guiar a empresa para gerenciar e avaliar melhor parceiros e a
+manutenção do seu patamar de qualidade durante o tempo.
+
+# Testes de hipótese
+
+```{r}
+
+# Filtra dados por atendimento
+cuidados_agudos <- df_alt1 %>%
+  filter(!tipo_atend == "hospitais de acesso crítico")
+
+acesso_critico <- df_alt1 %>% 
+  filter(tipo_atend == "hospitais de acesso crítico")
+
+# Teste t de Welch para comparar o nível de satisfação
+teste_satisf <- t.test(cuidados_agudos$nvl_satisf, acesso_critico$nvl_satisf, alternative = "two.sided")
+
+# Teste t de Welch para comparar a eficiência de cuidados
+teste_efi <- t.test(cuidados_agudos$efi_cuid, acesso_critico$efi_cuid, alternative = "two.sided")
+
+# Teste t de Welch para comparar a mortalidade hospitalar
+teste_mort <- t.test(cuidados_agudos$nvl_mort, acesso_critico$nvl_mort, alternative = "two.sided")
+
+# # Teste t de Welch para comparar a seguranca de informacao
+# teste_seg_cuid <- t.test(cuidados_agudos$nvl_seg_cuid, acesso_critico$nvl_seg_cuid, alternative = "two.sided")
+# NAO TEMOS ACESSO A NENHUMA AVALIACAO PARA HOSPITAIS DE ACESSO CRITICO NESSA VARIAVEL
+
+# Teste t de Welch para comparar a readmissão hospitalar
+teste_readim <- t.test(cuidados_agudos$nvl_readim, acesso_critico$nvl_readim, alternative = "two.sided")
+
+# Teste t de Welch para comparar a readmissão hospitalar
+teste_op_atend <- t.test(cuidados_agudos$op_atend, acesso_critico$op_atend, alternative = "two.sided")
+
+# Teste t de Welch para comparar a readmissão hospitalar
+teste_efi_img_medic <- t.test(cuidados_agudos$efi_img_medic, acesso_critico$efi_img_medic, alternative = "two.sided")
+
+
+```
+
+## Teste de hipotese da experiência do paciente
+
+```{r}
+# Resultados dos testes
+teste_satisf
+
+
+```
+
+O resultado sugere que há uma diferença estatisticamente significante
+entre as médias das duas amostras, portanto rejeita-se a hipótese nula
+de que as médias são iguais. Ou seja, podemos afirmar que há uma
+diferença significativa na experiência do paciente entre hospitais de
+cuidados agudos e hospitais de acesso crítico. Dessa forma, hospitais de
+acesso critico demonstram uma melhor experiência do paciente em relação
+aos hospitais de cuidados agudos.
+
+## Teste de hipotese do cuidado com o paciente
+
+```{r}
+teste_efi
+```
+
+O resultado sugere que há uma diferença estatisticamente significante
+entre as médias, portanto rejeita-se a hipotese nula de que as médias
+sao iguais. Ou seja, podemos afirmar que há diferença indicando que
+hospitais de acesso crítico tem uma efiácia de cuidados ligeiramente
+superior a hospitais de cuidados agudos.
+
+## Teste de hipotese da mortalidade hospitalar
+
+```{r}
+teste_mort
+```
+
+O resultado sugere que não há uma diferença estatisticamente
+significante entre as médias, portanto não rejeitamos a hipotese nula de
+que as médias sao iguais. Ou seja, não podemos afirmar que há diferença
+no mortalidade hospitalar entre os dois tipos de hospitais.
+
+## Teste de hipotese de readmissão hospitalar
+
+```{r}
+teste_readim
+```
+
+O resultado sugere que não há uma diferença estatisticamente
+significante entre as médias, portanto não rejeitamos a hipotese nula de
+que as médias sao iguais. Ou seja, não podemos afirmar que há diferença
+no readmissão hospitalar hospitalar entre os dois tipos de hospitais.
+
+## Teste de hipotese da oportunidade de atendimento
+
+```{r}
+teste_op_atend
+```
+
+O resultado sugere que há uma diferença estatisticamente significante
+entre as médias, portanto rejeita-se a hipotese nula de que as médias
+sao iguais. Ou seja, podemos afirmar que há diferença indicando que
+hospitais de acesso crítico proporcionam uma maior oportunidade de
+atendimento aos pacientes do que nos hospitais de cuidados agudos.
+
+## Teste de hipotese da eficiência no uso de imagens médicas
+
+```{r}
+teste_efi_img_medic
+```
+
+O resultado sugere que há uma diferença estatisticamente significante
+entre as médias, portanto rejeita-se a hipotese nula de que as médias
+sao iguais. Ou seja, podemos afirmar que há diferença indicando que
+Hospitais de cuidados agudos tem uso mais eficiente de imagens médicas
+do que nos hospitais de cuidados agudos.
+
+# Conclusão da análise dos testes de hipótese
+
+De acordo com essa análise de testes de hipótese podemos elaborar
+algumas informações estratégicas para o negócio, Tendo em vista
+demonstrar os resultados de maneira precisa, para hospitais de acesso
+crítico nos obtivemos que proporcionam maior eficiência de cuidados, na
+mesma perspectiva é necessário analisar as práticas hospitalares em
+relação a essa métrica para hospitais de cuidado agudo.
+
+Foi relatada melhor experiência do paciente nos hospitais de acesso
+crítico, o que nos torna a captar que há necessidade de hospitais de
+cuidados agudos revisitarem suas estratégias para melhorar satisfação do
+paciente, como instalações, atendimento ou mesmo a comunicação com os
+pacientes.
+
+Para Mortalidade hospitalar não houve nenhuma evidência de diferença
+significativa entre os dois grupos. Porém é importante continuar
+monitorando e avaliando as métricas a fim de garantir o padrão de
+qualidade ou mesmo a melhoria. Seguindo a mesma presmissa tivemos a
+readmissão hospitalar que não demonstrou diferenças significativas, o
+que pode denotar que há um padrão de qualidade na execução das praticas
+de prevenção de readmissões ou até mesmo uma oportunidade de melhoria da
+métrica.
+
+Sobre a oportunidade de atendimento, hospitais de acesso crítico se
+sobressairam, o que pode refletir diretamente na diferença em questões
+como eficiência do fluxo de trabalho ou na capacidade de resposta as
+necessidades. Mas, isso é de grande valia para que os hospitais de
+cuidado agudos possam analisar novamente todo seu processos e práticas a
+fim de aumentar a qualidade e oportunidade de atendimento.
+
+Agora sobre o uso eficiente de imagens médicas tempos os hospitais de
+cuidados agudos se destacando. Indicando assim, uma adoção de
+tecnologias e práticas que otimizam todo o uso de recursos diagnósticos.
+Nesse caso para hospitais de acesso crítico, é possivel utilizar como
+oportunidade para avaliar as tecnologias utilizadas tão quanto os
+protocolos de uso visando potencializar melhorias no sistema de
+diagnóstico.
+
+Essas informações buscam utilizar os resultados obtidos para guiar a
+gestão da saúde a direcionar suas decisões de maneira precisa e baseada
+em dados e informações concretas. Obviamnete sem ignorar o contexto de
+cada tipo de atendimento e hospital envolvido no processo de análise a
+fim de entender a realidade otimizando a junção da teoria e prática.
+
+# Conclusões finais
+
+## As análises realizadas sobre diversas variáveis e aspectos dessa base dados, nos permitiram chegar as seguintes conclusões:
+
+## - Proporção de Dados Ausentes:
+
+Foi identificado que a variável relacionada à segurança da informação
+hospitalar possui a maior proporção de dados ausentes (25,2%), seguida
+pela variável de eficiência do uso da imagem médica (20,7%). As demais
+variáveis apresentaram percentuais de dados faltantes na faixa de 5 a
+6%, exceto a variável de readmissão hospitalar, que teve apenas 1,2% de
+dados ausentes.
+
+## - Correlação entre Variáveis:
+
+-   A análise de correlação revelou que a satisfação dos pacientes
+    (nvl_satisf) possui uma correlação positiva moderada com a opinião
+    sobre o atendimento (op_atend) e com a eficiência dos cuidados
+    (efi_cuid).
+
+-   A avaliação local (aval_loc) tem uma correlação negativa com a
+    eficiência da imagem médica (efi_img_medic), sugerindo que uma
+    avaliação local mais alta pode estar associada a uma eficiência
+    menor na imagem médica, embora a correlação seja fraca.
+
+-   A segurança dos cuidados (nvl_seg_cuid) está positivamente
+    correlacionada com a eficiência dos cuidados (efi_cuid), indicando
+    que uma melhor segurança está associada a uma maior eficiência.
+
+-   A opinião sobre o atendimento (op_atend) tem uma correlação negativa
+    com a eficiência da imagem médica (efi_img_medic), sugerindo que uma
+    melhor opinião sobre o atendimento pode estar associada a uma menor
+    eficiência na imagem médica.
+
+## Avaliação Local e Resultado Geral:
+
+-   A correlação entre as avaliações locais e os resultados gerais por
+    estado mostrou uma correlação negativa moderada (-0,44), indicando
+    que uma maior avaliação local tende a estar associada a um menor
+    resultado geral.
+
+## Análise de testes de hipótese
+
+Testes de hipótese nos guiam pela significância estatística a fim de
+aprimorar a gestão da saúde e melhorar a decisões de acordo com os
+dados. Verificamos todos os cenários onde hospitais de cuidados agudos e
+acesso crítico se sobressaem e a partir disso saber em qual tipo de
+hospital merece atenção focalizad a fim de resolver problemas e propor
+melhorias.
+
+## Conclusão Geral
+
+Essas conclusões destacam a importância de abordar as lacunas de dados
+ausentes e a necessidade de melhorar a eficiência em certas áreas para
+aumentar a satisfação geral dos pacientes e a eficácia dos cuidados
+hospitalares, mas também propor maior oportunidade de atendimento e
+avaliar períodicamente a importância de uso de tecnologias para melhorar
+o diagnóstico salvando vidas e melhorando processo, consequentemente
+também os resultados.
+
+

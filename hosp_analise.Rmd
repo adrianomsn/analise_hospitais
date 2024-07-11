@@ -1,0 +1,636 @@
+---
+title: "Case_hospitais"
+author: "Adriano Neto"
+date: "2024-07-05"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# Carregando pacotes
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+# Limpa o ambiente
+rm(list = ls())
+
+# Carrega/instala conjunto de pacotes que geralmente utilizo
+pacotes = c(
+  "tidyverse", "readxl", "dplyr", "stringr", "xgboost",
+  "wooldridge", "lmtest", "faraway", "stargazer", "randomForest",
+  "ggplot2", "tseries", "car", "corrplot", "PerformanceAnalytics", 
+  "caret", "rmarkdown", "glmnet", "neuralnet", "e1071", "gbm", "rpart",
+  "httr", "jsonlite", "data.table", "basedosdados", "ggmap", "geosphere",
+  "sf", "osmdata", "tmaptools", "mapsapi"
+)
+
+# Instala pacotes que ainda não estão instalados
+for (x in pacotes) {
+  if (!x %in% installed.packages()) {
+    install.packages(x, repos = "http://cran.us.r-project.org")
+  }
+}
+
+# Carrega os pacotes
+lapply(pacotes, require, character.only = TRUE)
+rm(pacotes, x)
+```
+
+## Importando Dados
+
+```{r message=FALSE, warning=FALSE}
+# Defina o caminho para o arquivo
+file_path <- "C:/Users/super/Downloads/dataset.xlsx"
+
+# Liste as planilhas disponíveis no arquivo
+sheet_names <- excel_sheets(file_path)
+
+# Importe a planilha desejada (por exemplo, a primeira planilha)
+df <- read_excel(file_path, sheet = sheet_names[1])
+
+```
+
+## Funções utilizadas
+
+```{r message=FALSE, warning=FALSE}
+to_lowercase_df <- function(df) {
+  # Converte os nomes das colunas para minúsculas
+  colnames(df) <- tolower(colnames(df))
+  
+  # Aplica a função tolower a todas as colunas que são de tipo character ou factor
+  df[] <- lapply(df, function(col) {
+    if (is.character(col)) {
+      return(tolower(col))
+    } else if (is.factor(col)) {
+      return(factor(tolower(as.character(col))))
+    } else {
+      return(col)
+    }
+  })
+  return(df)
+}
+
+# Função para padronizar datas
+padronizar_data <- function(data) {
+  # Tentativa de parsing de diferentes formatos de data
+  data_formatada <- parse_date_time(data, orders = c("dmy", "dmy", "dmy"))
+
+  # Convertendo para o formato 'dia/mês/ano'
+  data_formatada <- format(data_formatada, "%d/%m/%Y")
+
+  return(data_formatada)
+}
+
+replace_special_characters <- function(df) {
+  # Função para remover acentos e substituir "ç" por "c"
+  remove_accent <- function(text) {
+    text <- gsub("ç", "c", text)
+    text <- gsub("Ç", "C", text)
+    text <- iconv(text, to = "ASCII//TRANSLIT")
+    text <- gsub("[^[:alnum:]_]", "", text)  # Remove caracteres especiais, mantendo letras e números
+    return(text)
+  }
+  
+  # Obter os nomes das colunas do data frame
+  col_names <- colnames(df)
+  
+  # Aplicar a função de remoção de acentos
+  col_names <- sapply(col_names, remove_accent)
+  
+  # Atribuir os novos nomes ao data frame
+  colnames(df) <- col_names
+  
+  return(df)
+}
+
+```
+
+## Tratamento dos dados
+
+```{r message=FALSE, warning=FALSE}
+# Padroniza para minúsculo os nomes de colunas
+df_alt <-  to_lowercase_df(df)
+
+# Padroniza caracteres especiais substituindo-os
+df_alt <- replace_special_characters(df_alt)
+
+# Checando possíveis duplicações
+dup <- duplicated(df_alt) | duplicated(df_alt, fromLast = TRUE)
+
+# Mostra duplicações se houverem
+dup_check <- df_alt[dup, ]
+# Sem duplicações
+
+# Renomeia variáveis
+df_alt <- df_alt %>% 
+  rename(nm_hosp = "nomedohospital",
+         tipo_atend = "tipodeatendimento",
+         serv_emerg = "realizaservicosdeemergencia",
+         ctr_PES = "atendeaoscriteriosdeusodeprontuarioeletronico",
+         aval_loc = "avaliacaodolocal",
+         nvl_mort = "comparacaonacionaldemortalidade",
+         nvl_seg_cuid = "comparacaonacionaldesegurancadoscuidados",
+         nvl_readim = "comparacaonacionaldereadmissao",
+         nvl_satisf = "comparacaonacionaldaexperienciadopaciente",
+         efi_cuid = "eficaciadacomparacaonacionaldecuidados",
+         op_atend = "oportunidadedeatendimentocomparacaonacional",
+         efi_img_medic = "usoeficientedecomparacaonacionaldeimagensmedicas")
+
+# Filtrando apenas hospitais que seguem os critérios básicos de análise
+df_alt1 <- df_alt %>% 
+  filter(ctr_PES == "true",
+         status == "true",
+         serv_emerg == "true")
+
+# Filtrar apenas os registros com a data mais recente
+df_alt <- df_alt1 %>%
+  group_by(id) %>%
+  filter(data == max(data))  # Filtrar para manter apenas a data mais recente por id
+
+# Identificar registros excluídos
+excluidos <- anti_join(df_alt1, df_alt, by = NULL)  # Encontrar registros exclusivos de df_alt
+
+# Faz uma contagem de hospitais ativos por município
+cont_cit <- df_alt %>% 
+ group_by(cidade, status) %>% 
+  summarise(contagem = n()) %>% 
+  arrange(desc(contagem)) 
+
+# As 03 cidades com maior número de hospitais ativos são respectivamente: São Paulo, Rio de Janeiro e Salvador
+
+df_alt <- df_alt %>%
+  filter(cidade %in% c("sao paulo", "rio de janeiro", "salvador"))
+
+```
+
+# Ajustando Variáveis de Indicadores
+
+## Ordem de prioridade de variaveis de uso hospitalar
+
+Foi consultado artigos da OMS e outras instituições da área da saúde, sobre escores de uso hospitalar, gestão de saúde e também a opinião de médicos atuantes.
+
+# Justificativa:
+
+## 1 - Segurança da informação do hospital:
+
+A importância desse item se justifica pelo princípio do sigilo médico. Vazamentos de dados e informações de paciente e profissionais que atuaram no cuidado de pessoas são graves e comprometem a integridade do local de trabalho e ferem a ética de trabalho.
+
+# 2 - Mortalidade no hospital:
+
+As taxas de mortalidade hospitalar devem ser avaliadas pela determinação de causas evitáveis como forma de delimitar e propor educação continuada para os profissionais que ali atuam.
+
+# 3 - Utilização eficiente de imagens médicas:
+
+O uso adequado de exames de imagem otimiza o diagnóstico, reduz custos e melhora a qualidade do cuidado.
+
+# 4 - Experiência do paciente:
+
+Períodos de internação hospitalar tem por objetivo estabilizar um quadro de saúde que tenha sido agravado por algum motivo. No entanto, coloca-se a pessoa num ambiente estranho e com rotinas fora do seu habitual. Assim, avaliar o que o paciente compreendeu da necessidade de internação e quais suas percepções do que pode ser melhorado pode gerar reflexões nos profissionais de saúde para tornar o cuidado mais humano.
+
+# 5 - Cuidados com o paciente:
+
+Reavaliar como foi a forma de cuidado de uma pessoa durante um período de internação, embora seja importante, não é prático de ser feito. Cada paciente recebe o cuidado indicado e existe o princípio da equidade que precisa ser respeitado. Duas pessoas com patologias parecidas talvez não recebam o mesmo cuidado em certos aspectos por necessitarem de abordagens diferentes.
+
+# 6 - Oportunidade de atendimento:
+
+Acesso oportuno a serviços de saúde é essencial para prevenir o agravamento de quadros e garantir um atendimento adequado.
+
+# 7 - Readmissão hospitalar:
+
+o retorno de pacientes logo após a alta hospitalar é sinal de que talvez a alta tenha sido indicada de forma precoce, fazendo valer a reavaliação do quadro em que o paciente se encontrava, buscando discutir os casos como forma de compreender e melhorar o processo de trabalho.
+
+## Ordem de prioridade e peso:
+
+1.  Segurança da informação
+2.  Mortalidade no hospital
+3.  Utilização eficiênciente de imagens médicas
+4.  Cuidados com o paciente
+5.  Experiência do paciente
+6.  Oportunidade de atendimento
+7.  Readmissão hospitalar
+
+```{r}
+# Mapear categorias qualitativas para números visando simplificar a análise e ponderação
+df_alt <- df_alt %>%
+  mutate(
+    nvl_seg_cuid = case_when(
+      tolower(nvl_seg_cuid) == "acima da média nacional" ~ 3,
+      tolower(nvl_seg_cuid) == "igual à média nacional" ~ 2,
+      tolower(nvl_seg_cuid) == "abaixo da média nacional" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    nvl_mort = case_when(
+      tolower(nvl_mort) == "acima da média nacional" ~ 1,
+      tolower(nvl_mort) == "igual à média nacional" ~ 2,
+      tolower(nvl_mort) == "abaixo da média nacional" ~ 3,
+      TRUE ~ NA_real_
+    ),
+    nvl_readim = case_when(
+      tolower(nvl_readim) == "acima da média nacional" ~ 1,
+      tolower(nvl_readim) == "igual à média nacional" ~ 2,
+      tolower(nvl_readim) == "abaixo da média nacional" ~ 3,
+      TRUE ~ NA_real_
+    ),
+    efi_cuid = case_when(
+      tolower(efi_cuid) == "acima da média nacional" ~ 3,
+      tolower(efi_cuid) == "igual à média nacional" ~ 2,
+      tolower(efi_cuid) == "abaixo da média nacional" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    nvl_satisf = case_when(
+      tolower(nvl_satisf) == "acima da média nacional" ~ 3,
+      tolower(nvl_satisf) == "igual à média nacional" ~ 2,
+      tolower(nvl_satisf) == "abaixo da média nacional" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    op_atend = case_when(
+      tolower(op_atend) == "acima da média nacional" ~ 3,
+      tolower(op_atend) == "igual à média nacional" ~ 2,
+      tolower(op_atend) == "abaixo da média nacional" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    efi_img_medic = case_when(
+      tolower(efi_img_medic) == "acima da média nacional" ~ 3,
+      tolower(efi_img_medic) == "igual à média nacional" ~ 2,
+      tolower(efi_img_medic) == "abaixo da média nacional" ~ 1,
+      TRUE ~ NA_real_
+    )
+  )
+
+# Calcular a média geral usando a média ponderada
+df_alt <- df_alt %>%
+  mutate(resultado_geral = ((nvl_mort * 2.5) + (nvl_seg_cuid * 3) + (efi_img_medic * 2.25) +
+                              (nvl_satisf * 1.75) + (efi_cuid * 1.50) + (op_atend * 1.35) +
+                              ( nvl_readim * 1.15)) / 13.5)
+
+
+# NOTA: Esses valores de pesos foram aplicados apenas para trazer variabilidade
+# e facilitar a diferenciação dada a ordem de prioridade dos indicadores avaliados.
+
+# Filtra apenas os municipios com a melhor avaliacao local para as 3 cidades selecionadas
+hosp_qualit <- df_alt %>%
+  group_by(cidade) %>%
+  arrange(desc(resultado_geral), .by_group = TRUE) %>%
+  slice_head(n = 6) %>%
+  ungroup()
+
+```
+
+# Obtendo geolocalização e coordenadas para calcular distância e tempo de deslocamento:
+
+```{r message=FALSE, warning=FALSE}
+# Usa api do maps
+register_google(key = "AIzaSyA5r8ghL04Oyr5dvWFL2fbOLhcEsZDUIiI")
+
+# Obtendo geocod (lat, lon) dos hospitais com base no endereco
+hosp_qualit$geocode <- geocode(hosp_qualit$endereco)
+
+# Splita latitude e longitude eem variaveis diferentes
+hosp_qualit$lat <- hosp_qualit$geocode$lat
+hosp_qualit$lon <- hosp_qualit$geocode$lon
+
+# Remover a coluna geocode se não for mais necessária
+hosp_qualit$geocode <- NULL
+
+
+# Endereço da empresa
+endereco_empresa <- "Alameda Santos, 415 - Vila Mariana, São Paulo - SP, 01418-100"
+coords_empresa <- geocode(endereco_empresa)
+
+# Calcule a distância entre a empresa e cada hospital
+hosp_qualit <- hosp_qualit %>%
+  mutate(distancia_km = distGeo(
+    matrix(c(lon, lat), ncol = 2),
+    matrix(c(coords_empresa$lon, coords_empresa$lat), ncol = 2)
+  ) / 1000)  # Convertendo de metros para quilômetros
+
+# Calcula tempo de distancia entre a empresa e os hospitais
+
+# Velocidade média de deslocamento por carro
+velocidade_media_kmh <- 80  # Assumindo uma velocidade média de 80 km/h
+
+# Velocidade média de voo
+velocidade_media_voo_kmh <- 600  # Assumindo vel média de voo de 600 km/h
+
+# Calcula tempo de deslocamento por via terrestre e aere em casos de maiores distancias
+hosp_qualit <- hosp_qualit %>%
+  mutate(
+    # Calcular o tempo de deslocamento por carro em minutos
+    tempo_desloc_carro_minutos = (distancia_km / velocidade_media_kmh) * 60,
+    horas_carro = floor(tempo_desloc_carro_minutos / 60),
+    minutos_carro = round(tempo_desloc_carro_minutos %% 60),
+    tempo_desloc_carro = sprintf("%02d:%02d", horas_carro, minutos_carro),
+    
+    # Calcular o tempo de deslocamento por voo em minutos
+    tempo_desloc_voo_minutos = (distancia_km / velocidade_media_voo_kmh) * 60,
+    horas_voo = floor(tempo_desloc_voo_minutos / 60),
+    minutos_voo = round(tempo_desloc_voo_minutos %% 60),
+    tempo_desloc_voo = sprintf("%02d:%02d", horas_voo, minutos_voo)
+  ) %>% 
+  select(-tempo_desloc_carro_minutos, -horas_carro, -minutos_carro, 
+         -tempo_desloc_voo_minutos, -horas_voo, -minutos_voo, -lat, -lon)
+
+# Arredonda as varaiveis distancia e tempo de deslocamento
+hosp_qualit <- hosp_qualit %>%
+  mutate(distancia_km = round(distancia_km, 3))
+
+# Filtra objetos por estado/cidade
+
+# Sao Paulo
+hosp_sp <- hosp_qualit %>%
+  filter(estado == "sp") %>%
+  select(-cep, -tipo_atend, -serv_emerg,
+         -ctr_PES, -status, -endereco, -data)%>%
+    relocate(resultado_geral, distancia_km, tempo_desloc_carro, .after = aval_loc)
+
+# Rio de Janeiro
+hosp_rj <- hosp_qualit %>%
+  filter(estado == "rj") %>%
+  select(-cep, -tipo_atend, -serv_emerg,
+         -ctr_PES, -status, -endereco, -data)%>%
+    relocate(resultado_geral, distancia_km, tempo_desloc_carro, .after = aval_loc)
+
+# Salvador
+hosp_sa <- hosp_qualit %>%
+  filter(estado == "ba") %>%
+  select(-cep, -tipo_atend, -serv_emerg,
+         -ctr_PES, -status, -endereco, -data)%>%
+    relocate(resultado_geral, distancia_km, tempo_desloc_carro, .after = aval_loc)
+
+
+```
+
+# ANÁLISE DO HOSPITAL MAIS BEM AVALIADO POR CIDADE
+
+## Top 3 hospitais com melhor avaliação de São Paulo:
+
+```{r}
+# Identificação de 1 principal hospital de cada cidade com o melhor resultado "Geral",
+
+#### Sao Paulo:
+
+
+# top 3 hospitais selecionados com base no resultado geral:
+# 70013
+# 70024
+# 70523
+
+
+
+## 3 MELHORES hospitais selecionados para São Paulo:
+
+# -   Hospital do Coração - 70013
+# 
+# -   Hospital Sírio Libanês - 70024
+# 
+# -   Hospital Central de Guaianazes - 70523
+
+## ORDEM DE INTEGRACAO PARA A CIDADE DE SÃO PAULO:
+
+# 1. lugar: Hospital do Coração
+
+# -   id: 70013
+# 
+# -   Nota geral: 3.0
+# 
+# -   Distância e tempo de deslocamento: 599m e menos de 1 minuto
+
+# 2. lugar: Hospital Sírio Libanês
+
+# -   id: 70024
+# 
+# -   Nota geral: 2.49
+# 
+# -   Distância e tempo de deslocamento: 1,46 km, 1 minuto a 2 minutos
+
+# 3. lugar: Hospital Central de Guaianazes
+
+# -   id: 70523
+# 
+# -   Nota geral: 2.51
+# 
+# -   Distância e tempo de deslocamento: 25,4km e 20 minutos
+
+```
+
+## Top 3 hospitais com melhor avaliação do Rio de Janeiro:
+
+```{r}
+## 3 MELHORES hospitais selecionados para Rio de Janeiro:
+
+# -   Hospital Norte Dor - 70066
+# 
+# -   Clínica Traumato Ortopédica - 70443
+# 
+# -   Hospital Mario Kroeff - 70453
+
+## ORDEM DE INTEGRAÇÃO PARA A CIDADE DO RIO DE JANEIRO:
+
+# 1º lugar: Hospital Norte Dor
+
+# -   id: 70066
+# 
+# -   Nota geral: 2.381481
+# 
+# -   Distância e tempo de deslocamento: 348.1km e 04h :21m
+
+# 2. lugar: Clínica Traumato Ortopédica
+
+# -   id: 70443
+# 
+# -   Nota geral: 2.374074
+# 
+# -   Distância e tempo de deslocamento: 347.1km e 04h :20m
+
+# 3. lugar: Hospital Mario Kroeff
+
+# -   id: 70453
+# 
+# -   Nota geral: 2.366667
+# 
+# -   Distância e tempo de deslocamento: 353.6km e 04h :25m
+
+```
+
+## Top 3 hospitais com melhor avaliação de Salvador:
+
+```{r}
+## 3 MELHORES hospitais selecionados para Rio de Janeiro:
+
+# -   Cardio Pulmonar da Bahia - 70769
+# 
+# -   Hospital Santo Amaro - 70789
+# 
+# -   Hospital da Cidade - 70784
+
+# 1º lugar: Cardio Pulmonar da Bahia
+
+# -   id: 70769
+# 
+# -   Nota geral: 2.422
+# 
+# -   Distância e tempo de deslocamento: 1451.4km 18h:09 minutos
+
+# 2º lugar: Hospital Santo Amaro
+
+# -   id: 70789
+# 
+# -   Nota geral: 2.222222
+# 
+# -   Distância e tempo de deslocamento: 1451.2km e 18h:08 minutos
+
+# 3º lugar: Hospital da Cidade
+
+# -   id: 70784
+# 
+# -   Nota geral: 2.222222
+# 
+# -   Distância e tempo de deslocamento: 1456,2km e 18h:12 minutos
+
+```
+
+# Qual o hospital possui o melhor resultado "GERAL"?
+
+Essa pergunta será respondida seguindo as instruções repassadas. Identificaremos **1 principal hospital** de cada cidade com o **melhor resultado "GERAL"**.
+
+```{r}
+
+# # Unir os data frames
+# top_3_comb <- bind_rows(hosp_sp_top_3, hosp_rj_top_3, hosp_sa_top_3)
+# 
+# # Filtra por id e ordena por resultado_geral
+# result_final <- top_3_comb %>%
+#   filter(id %in% c("70013", "70066", "70769")) %>%
+#   arrange(resultado_geral)
+# 
+
+
+# 1º Lugar na ordem de integração:
+
+# Hospital do Coração São Paulo - SP
+
+## Justificativa:
+
+# Nota no resultado geral, menor distância e tempo de deslocamento.
+# Assumindo velocidade de locomoção a 80km/h, assim obtemos o resultado de
+# 1 minuto de deslocamento entre os locais.
+
+# 2º Lugar na ordem de integração:
+
+# Hospital Norte Dor Rio de Janeiro - RJ
+
+## Justificativa:
+
+# Nota no resultado geral, menor distância e tempo de deslocamento.
+# Assumindo velocidade de locomoção a 80km/h, assim obtemos 4h e 21
+# minutos de deslocamento entre os locais. Se considerar via área para
+# deslocamento o tempo reduz para pouco mais de 1 hora.
+
+# 3º lugar na ordem de integração:
+
+# Cardio Pulmonar da Bahia Salvador - BA
+
+## Justificativa:
+
+# Nota no resultado geral, menor distância e tempo de deslocamento.
+# Assumindo velocidade de locomoção a 80km/h, assim obtemos 18h e 09
+# minutos de deslocamento. Se considerar via área para deslocamento o
+# tempo reduz para pouco mais de 2 hrs e 20 minutos.
+
+```
+
+# Informações adicionais:
+
+Abaixo temos os hospitais remanescentes da lista tríplice, é interessante salientar que esses hospitais tiverem bons resultados. São futuras oportunidades de integração a empresa dado o ótimo nível demonstrado na avaliação seja por meio de seus serviços e práticas bem aplicadas, como também na baixo tempo de deslocação em relação a empresa dada o estado e município onde se esta alocado.
+
+Outro ponto importante é, todos os hospitais selecionados para essas últimas etapas tanto da lista mais bem avaliadas como na lista de sugestão abaixo, são hospitais de cuidados agudos, ou seja, são maiores, oferecem mais serviços médicos, especialidades e infraestrutura maior. Tendo isso em vista, esse poderia ser um ponto de atenção para focalizar futuras integrações de hospitais, dada maior cobertura de atendimento, ampla variedade de serviços, tem vínculo com seguradores privadas ou mesmo programas governamentais, além de estrutura com funcionalidade 24 horas por dia e 7 dias por semana. Assim, seria muito mais benéfico a empresa ter parcerias com estrutura, qualidade e capilaridade maior, consequentemente resultando em maiores resultados financeiros.
+
+Ordenadamente sugiro essa prioridade de avaliação de futuras integrações:
+
+## 1. Hospital Paulistano
+
+```         
+Local: São Paulo - SP\
+Resultado geral: 2.422222\
+Distancia: 800m\
+Tempo de deslocamento: 1 minuto
+```
+
+## 2. Hospital Albert Sabin
+
+```         
+Local: São Paulo - SP\
+Resultado geral: 2.418519\
+Distância: 8,5km\
+Tempo de deslocamento: 6 minutos
+```
+
+## 3. Hospital Sagrada Família
+
+```         
+Local: São Paulo - SP\
+Resultado geral: 2.388889\
+Distância: 11km\
+Tempo de deslocamento: 8 minutos
+```
+
+## 4. Hospital de Clin Santa Cruz
+
+```         
+Local: Rio de Janeiro - RJ\
+Resultado geral: 2.351852\
+Distância: 312km\
+Tempo de deslocamento: 3h e 54 minutos
+```
+## 5. Hospital Samaritano Barra
+
+```         
+Local: Rio de Janeiro - RJ\
+Resultado geral: 2.351852\
+Distância:341,4km\
+Tempo de deslocamento:04h :16 min
+```
+
+
+## 6. Ordem Terceira do Carmo
+
+Local: Rio de Janeiro - RJ\
+Resultado geral: 2.318519\
+Distância: 362km\
+Tempo de deslocamento: 4h e 32 minutos
+
+## 7. Hospital Aliança
+
+Local: Salvador - BA\
+Resultado geral: 2.148148\
+Distância: 1452.1km\
+Tempo de deslocamento: 18h e 09 minutos
+
+## 8. Oftalmoclin
+
+Local: Salvador - BA\
+Resultado geral: 2.151852\
+Distância: 1452.3km\
+Tempo de deslocamento: 18h e 09 minutos
+
+## 9. Cto Médico Agenor Paiva
+
+Local: Salvador - BA\
+Resultado geral: 2.177778\
+Distância: 1458.07km\
+Tempo de deslocamento: 18h e 14 minutos
+
+```{r}
+# # Unir os data frames
+# top_3_comb <- bind_rows(hosp_sp_top_3, hosp_rj_top_3, hosp_sa_top_3)
+# 
+# # Filtrar pelos IDs especificados e ordenar por resultado_geral
+# result_alt <- top_3_comb %>%
+#   filter(id %in% c("70543", "70523", "70118", "70458", "70785", "70776")) %>% 
+#   arrange(resultado_geral)
+
+
+
+```
+
+# 
