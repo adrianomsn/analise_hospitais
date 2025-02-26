@@ -1,6 +1,6 @@
 # ANÁLISE DE OPORTUNIDADE EM SAÚDE: MELHORES HOSPITAIS PARA INTEGRAÇÃO
 
-# Identificando o melhor hospital de cada cidade de acordo com melhor resultado geral e métricas de gestão em saúde
+# Analisando resultados do Indicador Geral de Gestão Hospitalar a nível Nacional, Estadual e Municipal
 
 A seleção se deu com base nos melhores valores para 'resultado_geral' que é a média ponderada de pesos
 acerca dos escores hospitalares. O critério de avaliação posterior para decidir a ordem de integração foi
@@ -114,7 +114,7 @@ de acordo com as instruções do case, onde tempo de deslocamento e distância s
 
 ------------------------------------------------------------------------
 
-# [Qual o hospital possui o melhor resultado "GERAL"?]{.underline}
+# Ranqueamento de hospitais de acordo com o Indicador Geral de Qualidade de Serviço Hospitalar
 
 ## Essa pergunta será respondida seguindo as instruções repassadas.
 
