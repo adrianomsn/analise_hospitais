@@ -1,122 +1,192 @@
-# Análise de Oportunidade em Saúde: Melhores Hospitais para Integração
+# Análise Estratégica de Oportunidades para Integração Hospitalar  
 
-## Introdução
+## 1. Sumário Executivo  
 
-Este projeto visa atender à necessidade de uma empresa de saúde em tecnologia que avalia hospitais para parcerias de trabalho. Para isso, utilizamos uma base de dados com critérios de avaliação de instituições hospitalares.
+Este documento apresenta a análise técnica realizada para identificar e priorizar hospitais estratégicos para integração com uma empresa de tecnologia em saúde.
 
-O objetivo principal é analisar e identificar os hospitais mais adequados nas 3 cidades com maior atividade no setor hospitalar. A seleção inicial foca em critérios de prestação de serviços e assistência hospitalar, priorizando os 3 hospitais com o melhor "Resultado Geral" em cada cidade.
+A seleção considerou critérios objetivos de qualidade assistencial, gestão hospitalar e viabilidade operacional (distância e tempo de deslocamento). Como resultado, foram definidos:
 
-Em seguida, definimos a ordem de prioridade para a integração, considerando a localização da empresa e o tempo/distância de deslocamento até o hospital. Além disso, o projeto busca identificar futuras oportunidades em outras localidades e instituições com qualidade em gestão hospitalar.
+- 3 municípios prioritários;
+- 3 hospitais por município com melhor desempenho;
+- 1 hospital prioritário por cidade para início imediato da estratégia de integração.
 
----
-
-## Metodologia
-
-A análise iniciou com o tratamento e filtro da base de dados, aplicando os seguintes critérios mínimos para selecionar hospitais elegíveis:
-
-* Considerar apenas a data de competência mais atual para avaliar o status recente do hospital.
-* Considerar apenas hospitais ativos.
-* O hospital deve atender aos critérios para o uso do Prontuário Eletrônico de Saúde.
-* O hospital precisa prestar serviços de emergência.
-
-Após a aplicação desses filtros, foram selecionados os 3 municípios com a maior quantidade de hospitais ativos que atendiam aos requisitos mínimos.
-
-A metodologia de cálculo do indicador de "resultado_geral" considerou uma média ponderada dos escores hospitalares. Os pesos foram definidos com base em uma consulta a profissionais da área da saúde e artigos da OMS e afins sobre gestão hospitalar, seguindo a seguinte ordem de prioridade e peso:
-
-1.  Segurança da informação (Peso: 3)
-2.  Mortalidade no hospital (Peso: 2.5)
-3.  Utilização eficiente de imagens médicas (Peso: 2.25)
-4.  Experiência do paciente (Peso: 1.75)
-5.  Cuidados com o paciente (Peso: 1.50)
-6.  Oportunidade de atendimento (Peso: 1.35)
-7.  Readmissão hospitalar (Peso: 1.15)
-
-A fórmula utilizada para calcular o resultado geral foi a seguinte média ponderada:
-
-![lagrida_latex_editor (2)](https://github.com/user-attachments/assets/08845570-d379-4266-90a1-61624461d1fb)
-
-Onde:
-* `nvl_seg_cuid`: Escore de Segurança e Cuidados.
-* `nvl_mort`: Escore de Mortalidade.
-* `efi_img_medic`: Escore de Eficiência em Imagens Médicas.
-* `nvl_satisf`: Escore de Satisfação do Paciente.
-* `efi_cuid`: Escore de Eficiência de Cuidados.
-* `op_atend`: Escore de Oportunidade de Atendimento.
-* `nvl_readim`: Escore de Nível de Readmissão.
-* $13.5$ é a soma total dos pesos.
-
-Para o cálculo da distância e tempo de deslocamento entre a localização da empresa e os hospitais, foram consideradas duas velocidades médias:
-
-* Velocidade média de deslocamento por carro: 80 km/h.
-* Velocidade média de voo: 600 km/h (utilizada para casos de maiores distâncias).
-
-O tempo de deslocamento foi calculado utilizando a fórmula básica de tempo, sendo apresentado em horas e minutos.  
-![lagrida_latex_editor (3)](https://github.com/user-attachments/assets/ef051b83-9bb3-4c03-8281-cff3cade0927)
+O estudo fornece base estruturada para tomada de decisão, com foco em eficiência operacional, potencial de retorno e escalabilidade futura.
 
 ---
 
-Os resultados da análise do Indicador Geral de Gestão Hospitalar apresenta uma avaliação nos níveis Nacional, Estadual e Municipal, com o objetivo de identificar os melhores hospitais para integração.
+## 2. Objetivo do Projeto  
 
-A seleção inicial dos hospitais baseou-se nos maiores valores do 'resultado_geral', que representa a média ponderada dos escores hospitalares. O critério de avaliação subsequente para definir a ordem de integração, conforme as instruções do projeto, foi o tempo e a distância de deslocamento.
+Identificar os hospitais com maior potencial estratégico para integração tecnológica, considerando:
 
-## Resultado Final: Hospitais Selecionados por Cidade e Ordem de Integração
+- Qualidade de gestão hospitalar;
+- Estrutura assistencial compatível com prontuário eletrônico;
+- Capacidade operacional (emergência ativa);
+- Proximidade logística em relação à sede da empresa.
 
+---
 
-### São Paulo
+## 3. Metodologia  
 
-| Ordem | Nome do Hospital          | ID    | Nota Geral | Distância | Tempo de Deslocamento |
-| :---- | :------------------------ | :---- | :--------- | :-------- | :-------------------- |
-| 1º    | Hospital do Coração       | 70013 | 3.0        | 599m      | Menos de 1 minuto     |
-| 2º    | Hospital Sírio Libanês    | 70024 | 2.49       | 1,46 km   | 1 a 2 minutos         |
-| 3º    | Hospital Central de Guaianazes | 70523 | 2.51       | 25,4 km   | 20 minutos            |
+### 3.1 Critérios de Elegibilidade  
 
-### Rio de Janeiro
+Foram considerados apenas hospitais que atendiam simultaneamente aos seguintes requisitos:
 
-| Ordem | Nome do Hospital            | ID    | Nota Geral | Distância | Tempo de Deslocamento |
-| :---- | :-------------------------- | :---- | :--------- | :-------- | :-------------------- |
-| 1º    | Hospital Norte Dor          | 70066 | 2.381481   | 348.1 km  | 04h 21m               |
-| 2º    | Clínica Traumato Ortopédica | 70443 | 2.374074   | 347.1 km  | 04h 20m               |
-| 3º    | Hospital Mario Kroeff       | 70453 | 2.366667   | 353.6 km  | 04h 25m               |
+- Competência mais recente disponível na base;
+- Status ativo;
+- Aptidão para utilização de Prontuário Eletrônico em Saúde;
+- Atendimento de emergência ativo.
 
-### Salvador
+Após aplicação dos filtros, foram selecionados os 3 municípios com maior volume de hospitais elegíveis.
 
-| Ordem | Nome do Hospital          | ID    | Nota Geral | Distância | Tempo de Deslocamento |
-| :---- | :------------------------ | :---- | :--------- | :-------- | :-------------------- |
-| 1º    | Cardio Pulmonar da Bahia  | 70769 | 2.422      | 1451.4 km | 18h 09 minutos        |
-| 2º    | Hospital Santo Amaro      | 70789 | 2.222222   | 1451.2 km | 18h 08 minutos        |
-| 3º    | Hospital da Cidade        | 70784 | 2.222222   | 1456,2 km | 18h 12 minutos        |
+---
 
-## Resultado Final: Hospitais para Integração Prioritária
+### 3.2 Cálculo do Indicador de Resultado Geral  
 
-O resultado final apresenta o principal hospital de cada cidade com o melhor resultado geral, priorizando a ordem de integração com base na nota geral, distância e tempo de deslocamento.
+O indicador **resultado_geral** foi construído por meio de média ponderada dos escores hospitalares, com pesos definidos com base em literatura técnica e consulta a profissionais da área da saúde.
 
-1.  **Hospital do Coração** (São Paulo - SP)
-    * **Justificativa:** Apresentou a melhor nota no resultado geral e a menor distância e tempo de deslocamento entre os hospitais analisados em São Paulo. Assumindo uma velocidade de locomoção de 80 km/h, o tempo estimado é de 1 minuto.
+#### Critérios e Pesos:
 
-2.  **Hospital Norte Dor** (Rio de Janeiro - RJ)
-    * **Justificativa:** Destacou-se com a melhor nota no resultado geral e a menor distância e tempo de deslocamento entre os hospitais analisados no Rio de Janeiro. Assumindo uma velocidade de locomoção de 80 km/h, o tempo estimado é de 4 horas e 21 minutos. Se considerado deslocamento aéreo, o tempo reduz para pouco mais de 1 hora.
+| Critério                           | Peso |
+|------------------------------------|------|
+| Segurança da Informação            | 3,00 |
+| Mortalidade Hospitalar             | 2,50 |
+| Eficiência em Imagens Médicas      | 2,25 |
+| Experiência do Paciente            | 1,75 |
+| Eficiência dos Cuidados            | 1,50 |
+| Oportunidade de Atendimento        | 1,35 |
+| Readmissão Hospitalar              | 1,15 |
 
-3.  **Cardio Pulmonar da Bahia** (Salvador - BA)
-    * **Justificativa:** Obteve a melhor nota no resultado geral e a menor distância e tempo de deslocamento entre os hospitais analisados em Salvador. Assumindo uma velocidade de locomoção de 80 km/h, o tempo estimado é de 18 horas e 09 minutos. Se considerado deslocamento aéreo, o tempo reduz para pouco mais de 2 horas e 20 minutos.
+**Soma total dos pesos: 13,5**
 
-## Insights Adicionais e Oportunidades Futuras
+O resultado_geral corresponde à soma ponderada dos escores dividida pela soma dos pesos.
 
-Os hospitais remanescentes da lista tríplice de cada cidade também apresentaram bons resultados e representam futuras oportunidades de integração para a empresa. O ótimo nível demonstrado na avaliação, tanto pelos serviços e práticas quanto pelo baixo tempo de deslocamento em relação à localização da empresa, reforça seu potencial.
+---
 
-Todos os hospitais selecionados, tanto na lista principal quanto na lista de sugestões adicionais, são hospitais de cuidados agudos. Isso implica que são maiores, oferecem mais serviços médicos, especialidades e possuem maior infraestrutura. Essa característica pode ser um ponto focal para futuras integrações, dada a maior cobertura de atendimento, ampla variedade de serviços, vínculos com seguradoras privadas ou programas governamentais, e estrutura com funcionalidade 24 horas por dia, 7 dias por semana. Parcerias com instituições de maior estrutura, qualidade e capilaridade tendem a resultar em maiores benefícios financeiros para a empresa.
+### 3.3 Critério Logístico  
 
-### Ordem de Prioridade para os Demais Hospitais Ranqueados:
+Para definição da ordem de integração, foi considerada:
 
-| Ordem | Nome do Hospital            | Local            | Resultado Geral | Distância | Tempo de Deslocamento |
-| :---- | :-------------------------- | :--------------- | :-------------- | :-------- | :-------------------- |
-| 1º    | Hospital Paulistano         | São Paulo - SP   | 2.422222        | 800m      | 1 minuto              |
-| 2º    | Hospital Albert Sabin       | São Paulo - SP   | 2.418519        | 8,5 km    | 6 minutos             |
-| 3º    | Hospital Sagrada Família    | São Paulo - SP   | 2.388889        | 11 km     | 8 minutos             |
-| 4º    | Hospital Samaritano Barra   | Rio de Janeiro - RJ | 2.351852        | 341,4 km  | 04h 16 min            |
-| 5º    | Hospital de Clínicas Santa Cruz | Rio de Janeiro - RJ | 2.351852        | 312 km    | 3h 54 minutos         |
-| 6º    | Ordem Terceira do Carmo     | Rio de Janeiro - RJ | 2.318519        | 362 km    | 4h 32 minutos         |
-| 7º    | Hospital Aliança            | Salvador - BA    | 2.148148        | 1452.1 km | 18h 09 minutos        |
-| 8º    | Oftalmoclin               | Salvador - BA    | 2.151852        | 1452.3 km | 18h 09 minutos        |
-| 9º    | CTO Médico Agenor Paiva     | Salvador - BA    | 2.177778        | 1458.07 km| 18h 14 minutos        |
+- Distância entre sede da empresa e hospital;
+- Tempo estimado de deslocamento.
 
+Parâmetros utilizados:
 
+- Velocidade média rodoviária: 80 km/h  
+- Velocidade média aérea: 600 km/h (para longas distâncias)
+
+O tempo foi calculado com base na fórmula:  
+
+> Tempo = Distância / Velocidade  
+
+---
+
+## 4. Resultados Consolidados  
+
+### 4.1 Hospitais Selecionados por Município  
+
+#### São Paulo (SP)
+
+| Ordem | Hospital | Nota Geral | Distância | Tempo |
+|-------|----------|------------|-----------|-------|
+| 1º | Hospital do Coração | 3,00 | 599 m | < 1 min |
+| 2º | Hospital Sírio Libanês | 2,49 | 1,46 km | 1–2 min |
+| 3º | Hospital Central de Guaianazes | 2,51 | 25,4 km | 20 min |
+
+---
+
+#### Rio de Janeiro (RJ)
+
+| Ordem | Hospital | Nota Geral | Distância | Tempo Rodoviário |
+|-------|----------|------------|-----------|------------------|
+| 1º | Hospital Norte Dor | 2,381 | 348 km | 4h21 |
+| 2º | Clínica Traumato Ortopédica | 2,374 | 347 km | 4h20 |
+| 3º | Hospital Mario Kroeff | 2,366 | 353 km | 4h25 |
+
+---
+
+#### Salvador (BA)
+
+| Ordem | Hospital | Nota Geral | Distância | Tempo Rodoviário |
+|-------|----------|------------|-----------|------------------|
+| 1º | Cardio Pulmonar da Bahia | 2,422 | 1451 km | 18h09 |
+| 2º | Hospital Santo Amaro | 2,222 | 1451 km | 18h08 |
+| 3º | Hospital da Cidade | 2,222 | 1456 km | 18h12 |
+
+---
+
+## 5. Hospitais Prioritários para Integração Imediata  
+
+Com base em desempenho técnico e viabilidade operacional, recomenda-se priorizar:
+
+### 1️⃣ Hospital do Coração – São Paulo (SP)
+
+- Maior nota geral entre todos os analisados.
+- Distância inferior a 1 km da sede.
+- Tempo estimado inferior a 1 minuto.
+- Alto potencial de rápida implementação e baixo custo logístico.
+
+---
+
+### 2️⃣ Hospital Norte Dor – Rio de Janeiro (RJ)
+
+- Melhor desempenho no município.
+- Tempo rodoviário estimado: 4h21.
+- Tempo aéreo estimado: ~1h.
+- Representa expansão estratégica regional com viabilidade operacional.
+
+---
+
+### 3️⃣ Cardio Pulmonar da Bahia – Salvador (BA)
+
+- Melhor resultado geral na cidade.
+- Tempo rodoviário elevado (18h).
+- Tempo aéreo estimado: ~2h20.
+- Expansão com foco em diversificação geográfica.
+
+---
+
+## 6. Análise Estratégica e Oportunidades Futuras  
+
+### 6.1 Perfil das Instituições Selecionadas  
+
+Todos os hospitais priorizados são instituições de cuidados agudos, caracterizadas por:
+
+- Estrutura hospitalar de médio a grande porte;
+- Atendimento 24h;
+- Alta complexidade assistencial;
+- Ampla cobertura de especialidades;
+- Integração com operadoras e programas governamentais.
+
+Esse perfil favorece:
+
+- Maior volume de pacientes;
+- Maior capilaridade tecnológica;
+- Potencial de retorno financeiro ampliado;
+- Escalabilidade da solução.
+
+---
+
+### 6.2 Pipeline de Expansão  
+
+Os hospitais ranqueados em posições subsequentes permanecem como oportunidades estratégicas para segunda fase de expansão, especialmente em São Paulo, onde o custo logístico é significativamente menor.
+
+---
+
+## 7. Conclusão  
+
+A análise permitiu estruturar um modelo objetivo de priorização hospitalar, combinando:
+
+- Qualidade assistencial;
+- Governança hospitalar;
+- Maturidade tecnológica;
+- Viabilidade logística.
+
+O cenário ideal para início da estratégia é São Paulo, devido à proximidade, alto desempenho e menor risco operacional.
+
+Rio de Janeiro e Salvador representam vetores de expansão regional estruturada, com potencial de consolidação progressiva.
+
+### Recomendação Estratégica
+
+1. Início imediato em São Paulo;
+2. Planejamento de expansão faseada para RJ;
+3. Consolidação futura em Salvador, priorizando deslocamento aéreo.
